@@ -76,13 +76,16 @@ commute-tracker/
 │   ├── tsconfig.json             # TypeScript Config
 │   └── package.json
 │
-└── frontend/                     # Frontend (Nuxt 4 แท้ + Tailwind CSS)
+└── frontend/                     # Frontend (Nuxt 4 แท้ + Tailwind CSS + Nitro Serverless)
     ├── app/                      # โครงสร้างโฟลเดอร์แอปพลิเคชัน Nuxt 4 แท้
     │   ├── components/           # GoogleMap, RouteSummaryCard, TravelModeSelector, FallbackLocationInput
-    │   ├── composables/          # useGeolocation, useRouteTracker
+    │   ├── composables/          # useGeolocation, useRouteTracker (Multi-tier resilient routing)
     │   ├── types/                # TypeScript Interfaces
     │   ├── pages/index.vue       # หน้าจอหลัก Responsive Dashboard
     │   └── app.vue               # Root Component
+    ├── server/                   # Nitro Serverless API (สำหรับ Deploy บน Vercel ได้ 100% Zero-config)
+    │   └── api/
+    │       └── route.post.ts     # Serverless Route Proxy เรียก Google Routes API
     ├── .env.example              # ตัวอย่าง Environment Variables ฝั่ง Frontend
     ├── Dockerfile                # Multi-stage Dockerfile สำหรับ Nuxt 4
     ├── nuxt.config.ts            # Nuxt 4 Config

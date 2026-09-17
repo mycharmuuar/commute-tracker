@@ -209,6 +209,55 @@ export class GoogleMapsService {
   }
 
   /**
+   * เรียก Google Directions API (Legacy) เพื่อเป็น Fallback หาก Routes API ไม่พร้อม
+   */
+  public async getDirectionsWithLegacyApi(request: RouteRequest, apiKey: string): Promise<RouteResponse> {
+    const originStr = typeof request.origin === 'string' ? request.origin : `${request.origin.lat},${request.origin.lng}`;
+    const destStr = typeof request.destination === 'string' ? request.destination : `${request.destination.lat},${request.destination.lng}`;
+    const mode: TravelMode = request.mode || 'driving';
+
+    const response = await axios.get(GoogleMapsService.LEGACY_DIRECTIONS_URL, {
+      params: {
+        origin: originStr,
+        destination: destStr,
+        mode,
+        departure_time: 'now',
+        language: 'th',
+        key: apiKey,
+      },
+      timeout: 10000,
+    });
+
+    const data = response.data;
+    if (data.status !== 'OK') {
+      throw new Error(`Legacy API error: ${data.status} - ${data.error_message || ''}`);
+    }
+
+    const route = data.routes[0];
+    const leg = route.legs[0];
+    const durationInTraffic = leg.duration_in_traffic || leg.duration;
+
+    return {
+      distance: { text: leg.distance.text, value: leg.distance.value },
+      duration: { text: leg.duration.text, value: leg.duration.value },
+      duration_in_traffic: { text: durationInTraffic.text, value: durationInTraffic.value },
+      hasTrafficData: Boolean(leg.duration_in_traffic),
+      startAddress: leg.start_address,
+      endAddress: leg.end_address,
+      startLocation: { lat: leg.start_location.lat, lng: leg.start_location.lng },
+      endLocation: { lat: leg.end_location.lat, lng: leg.end_location.lng },
+      overviewPolyline: route.overview_polyline.points,
+      steps: (leg.steps || []).map((s: any) => ({
+        instructions: (s.html_instructions || '').replace(/<[^>]*>?/gm, ''),
+        distance: s.distance?.text || '',
+        duration: s.duration?.text || '',
+      })),
+      travelMode: mode,
+      departureTime: new Date().toISOString(),
+    };
+  }
+
+  /**
    * รองรับทั้ง Routes API (New) และสลับไป Legacy Directions API หากต้องการ
    */
   public async getDirections(request: RouteRequest): Promise<RouteResponse> {
@@ -219,27 +268,31 @@ export class GoogleMapsService {
     }
 
     try {
-      // ลองเรียก Routes API (New) ตัวแรกเสมอ
+      // 1. ลองเรียก Routes API (New) ตัวแรกเสมอ
       return await this.getDirectionsWithRoutesApi(request, apiKey);
-    } catch (error: any) {
-      // หากเกิดข้อผิดพลาด ให้ตรวจดูสาเหตุและคืนข้อความที่เป็นมิตร
-      const responseData = error.response?.data;
-      const status = error.response?.status;
-      const errorMessage = responseData?.error?.message || error.message;
+    } catch (routeError: any) {
+      // 2. หาก Routes API ไม่สำเร็จ ลองเรียก Legacy Directions API
+      try {
+        return await this.getDirectionsWithLegacyApi(request, apiKey);
+      } catch (legacyError: any) {
+        const responseData = routeError.response?.data;
+        const status = routeError.response?.status;
+        const errorMessage = responseData?.error?.message || routeError.message;
 
-      if (status === 403 || errorMessage?.includes('not enabled') || errorMessage?.includes('LegacyApiNotActivatedMapError')) {
-        throw new Error(`REQUEST_DENIED: คำขอถูกปฏิเสธโดย Google Maps API: ${errorMessage} (โปรดเปิดใช้งาน "Routes API" ใน Google Cloud Console)`);
+        if (status === 403 || errorMessage?.includes('not enabled') || errorMessage?.includes('LegacyApiNotActivatedMapError')) {
+          throw new Error(`REQUEST_DENIED: คำขอถูกปฏิเสธโดย Google Maps API: ${errorMessage} (โปรดเปิดใช้งาน "Routes API" ใน Google Cloud Console)`);
+        }
+
+        if (routeError.code === 'ECONNABORTED' || routeError.message?.includes('timeout')) {
+          throw new Error('TIMEOUT: การเชื่อมต่อกับ Google Maps API หมดเวลา กรุณาลองใหม่อีกครั้ง');
+        }
+
+        if (errorMessage?.startsWith('ZERO_RESULTS')) {
+          throw routeError;
+        }
+
+        throw new Error(`MAPS_ERROR: ${errorMessage || 'เกิดข้อผิดพลาดในการดึงข้อมูลเส้นทาง'}`);
       }
-
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        throw new Error('TIMEOUT: การเชื่อมต่อกับ Google Maps API หมดเวลา กรุณาลองใหม่อีกครั้ง');
-      }
-
-      if (errorMessage?.startsWith('ZERO_RESULTS')) {
-        throw error;
-      }
-
-      throw new Error(`MAPS_ERROR: ${errorMessage || 'เกิดข้อผิดพลาดในการดึงข้อมูลเส้นทาง'}`);
     }
   }
 }
