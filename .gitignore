@@ -10,9 +10,13 @@ node_modules/
 
 # Build & Output
 dist/
+**/dist/
 build/
+**/build/
 .output/
+**/.output/
 .nuxt/
+**/.nuxt/
 .nitro/
 .cache/
 
