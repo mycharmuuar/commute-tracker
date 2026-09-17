@@ -3,11 +3,11 @@ import request from 'supertest';
 import axios from 'axios';
 import { app } from '../src/app';
 
-// Mock axios เพื่อจำลองการตอบกลับของ Google Maps API โดยไม่ยิงเครือข่ายจริง
+// Mock axios เพื่อจำลองการตอบกลับของ Google Routes API โดยไม่ยิงเครือข่ายจริง
 vi.mock('axios');
 const mockedAxios = vi.mocked(axios, true);
 
-describe('Backend API Tests', () => {
+describe('Backend API Tests (Google Routes API)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.GOOGLE_MAPS_API_KEY = 'test-mock-api-key';
@@ -44,28 +44,35 @@ describe('Backend API Tests', () => {
       expect(res.body.message).toContain('กรุณาระบุตำแหน่งปลายทาง');
     });
 
-    it('ควรส่งคืนข้อมูลเส้นทางสำเร็จ (200) เมื่อพารามิเตอร์ถูกต้องและ Google API ตอบกลับ OK', async () => {
-      // Mock ข้อมูลที่ Google Maps Directions API ส่งกลับ
-      const mockGoogleResponse = {
+    it('ควรส่งคืนข้อมูลเส้นทางสำเร็จ (200) เมื่อพารามิเตอร์ถูกต้องและ Routes API ตอบกลับข้อมูลเส้นทาง', async () => {
+      const mockRoutesApiResponse = {
         data: {
-          status: 'OK',
           routes: [
             {
-              overview_polyline: { points: 'mock_polyline_points_string_xyz' },
+              distanceMeters: 5200,
+              duration: '1500s', // 25 นาที (traffic)
+              staticDuration: '1080s', // 18 นาที (static)
+              polyline: {
+                encodedPolyline: 'mock_polyline_points_string_xyz',
+              },
               legs: [
                 {
-                  distance: { text: '5.2 กม.', value: 5200 },
-                  duration: { text: '18 นาที', value: 1080 },
-                  duration_in_traffic: { text: '25 นาที', value: 1500 },
-                  start_address: 'Bangkok, Thailand',
-                  end_address: 'Sathorn, Bangkok, Thailand',
-                  start_location: { lat: 13.7367, lng: 100.5231 },
-                  end_location: { lat: 13.7226, lng: 100.5284 },
+                  distanceMeters: 5200,
+                  duration: '1500s',
+                  staticDuration: '1080s',
+                  startLocation: {
+                    latLng: { latitude: 13.7367, longitude: 100.5231 },
+                  },
+                  endLocation: {
+                    latLng: { latitude: 13.7226, longitude: 100.5284 },
+                  },
                   steps: [
                     {
-                      html_instructions: 'เลี้ยวขวาเข้าสู่ <b>ถนนพระราม 4</b>',
-                      distance: { text: '1.2 กม.' },
-                      duration: { text: '4 นาที' },
+                      distanceMeters: 1200,
+                      staticDuration: '240s',
+                      navigationInstruction: {
+                        instructions: 'เลี้ยวขวาเข้าสู่ ถนนพระราม 4',
+                      },
                     },
                   ],
                 },
@@ -75,7 +82,7 @@ describe('Backend API Tests', () => {
         },
       };
 
-      mockedAxios.get.mockResolvedValueOnce(mockGoogleResponse);
+      mockedAxios.post.mockResolvedValueOnce(mockRoutesApiResponse);
 
       const res = await request(app)
         .post('/api/route')
@@ -91,13 +98,12 @@ describe('Backend API Tests', () => {
       expect(res.body.data.duration_in_traffic.text).toBe('25 นาที');
       expect(res.body.data.hasTrafficData).toBe(true);
       expect(res.body.data.overviewPolyline).toBe('mock_polyline_points_string_xyz');
-      expect(res.body.data.steps[0].instructions).toBe('เลี้ยวขวาเข้าสู่ ถนนพระราม 4'); // stripped HTML
+      expect(res.body.data.steps[0].instructions).toBe('เลี้ยวขวาเข้าสู่ ถนนพระราม 4');
     });
 
-    it('ควรตอบกลับ 404 พร้อมข้อความที่เข้าใจง่าย เมื่อ Google API ส่งสถานะ ZERO_RESULTS', async () => {
-      mockedAxios.get.mockResolvedValueOnce({
+    it('ควรตอบกลับ 404 เมื่อ Routes API ไม่พบเส้นทาง (routes ว่าง)', async () => {
+      mockedAxios.post.mockResolvedValueOnce({
         data: {
-          status: 'ZERO_RESULTS',
           routes: [],
         },
       });
@@ -115,12 +121,17 @@ describe('Backend API Tests', () => {
     });
 
     it('ควรตอบกลับ 403 เมื่อคำขอถูกปฏิเสธ (REQUEST_DENIED)', async () => {
-      mockedAxios.get.mockResolvedValueOnce({
+      const error: any = new Error('Request failed with status code 403');
+      error.response = {
+        status: 403,
         data: {
-          status: 'REQUEST_DENIED',
-          error_message: 'The provided API key is invalid.',
+          error: {
+            message: 'Method doesn\'t allow unregistered callers (callers without established identity).',
+          },
         },
-      });
+      };
+
+      mockedAxios.post.mockRejectedValueOnce(error);
 
       const res = await request(app)
         .post('/api/route')
