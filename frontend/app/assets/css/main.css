@@ -7,3 +7,24 @@ body {
   background-color: #f8fafc;
   color: #1e293b;
 }
+
+/* Custom animations for route commute theme */
+@keyframes car-commute {
+  0% { transform: translateX(0%); }
+  50% { transform: translateX(calc(100% - 24px)); }
+  100% { transform: translateX(0%); }
+}
+
+@keyframes radar-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 0; }
+  100% { transform: scale(0.95); opacity: 0; }
+}
+
+.animate-car-commute {
+  animation: car-commute 4s ease-in-out infinite;
+}
+
+.animate-radar {
+  animation: radar-pulse 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
