@@ -1,51 +1,88 @@
 <template>
-  <div class="relative w-full h-full min-h-[460px] rounded-3xl overflow-hidden shadow-xl border border-slate-200/80 bg-slate-100 flex flex-col">
+  <div class="relative w-full h-full min-h-[500px] rounded-3xl overflow-hidden shadow-xl border border-slate-200/80 bg-slate-100 flex flex-col">
     <!-- Map Canvas Container -->
-    <div ref="mapElement" class="w-full h-full min-h-[460px] flex-1"></div>
+    <div ref="mapElement" class="w-full h-full min-h-[500px] flex-1"></div>
 
     <!-- Floating Top Bar Controls -->
     <div class="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-      <!-- Live Status Pill -->
-      <div class="pointer-events-auto bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-lg border border-slate-200/80 flex items-center gap-2 text-xs font-semibold text-slate-800">
-        <span class="relative flex h-2.5 w-2.5">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
-        </span>
-        <span>ระบบติดตามเส้นทาง Real-time</span>
+      <!-- Live Status & Simulation Trigger -->
+      <div class="pointer-events-auto flex items-center gap-2">
+        <div class="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-slate-200/80 flex items-center gap-2 text-xs font-bold text-slate-800">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
+          </span>
+          <span class="hidden sm:inline">ระบบติดตาม Real-time</span>
+          <span class="sm:hidden">GPS Live</span>
+        </div>
+
+        <!-- Simulation Launch Button -->
+        <button
+          v-if="overviewPolyline && !isSimulating"
+          @click="startSimulation"
+          type="button"
+          class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-3.5 py-1.5 rounded-full shadow-lg shadow-blue-500/25 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5"
+        >
+          <span>🎮</span>
+          <span>จำลองขับรถ GPS</span>
+        </button>
       </div>
 
-      <!-- Quick Action Buttons on Map -->
+      <!-- Advanced Controls: Traffic Layer, Map Theme, Recenter, External Maps -->
       <div class="pointer-events-auto flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-slate-200/80">
+        <!-- Live Traffic Toggle -->
+        <button
+          @click="toggleTrafficLayer"
+          type="button"
+          class="px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1"
+          :class="isTrafficEnabled ? 'bg-amber-100 text-amber-900 shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
+          title="เปิด/ปิด เลเยอร์สภาพจราจรสดของ Google (เส้นเขียว/เหลือง/แดง)"
+        >
+          <span>🚦</span>
+          <span class="hidden md:inline">{{ isTrafficEnabled ? 'จราจรสด: เปิด' : 'จราจรสด' }}</span>
+        </button>
+
+        <!-- Map Style Cycle (Normal -> Dark -> Satellite) -->
+        <button
+          @click="cycleMapTheme"
+          type="button"
+          class="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1"
+          title="สลับมุมมองแผนที่ (ปกติ / กลางคืน / ดาวเทียม)"
+        >
+          <span>{{ currentThemeIcon }}</span>
+          <span class="hidden md:inline">{{ currentThemeLabel }}</span>
+        </button>
+
+        <span class="text-slate-300">|</span>
+
+        <!-- Quick Focus Buttons -->
         <button
           v-if="origin"
           @click="focusLocation('origin')"
           type="button"
-          class="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-1"
-          title="เลื่อนแผนที่ไปที่ตำแหน่งของคุณ"
+          class="px-2 py-1.5 rounded-xl text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+          title="เลื่อนไปตำแหน่งคุณ"
         >
-          <span>📍</span>
-          <span class="hidden sm:inline">ฉัน</span>
+          📍 ฉัน
         </button>
 
         <button
           @click="focusLocation('destination')"
           type="button"
-          class="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors flex items-center gap-1"
-          title="เลื่อนแผนที่ไปที่บริษัท"
+          class="px-2 py-1.5 rounded-xl text-xs font-medium text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+          title="เลื่อนไปบริษัท"
         >
-          <span>🏢</span>
-          <span class="hidden sm:inline">บริษัท</span>
+          🏢 บริษัท
         </button>
 
         <button
           v-if="origin"
           @click="fitAllBounds"
           type="button"
-          class="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1"
-          title="แสดงทั้งต้นทางและปลายทาง"
+          class="px-2 py-1.5 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+          title="แสดงภาพรวมทั้ง 2 จุด"
         >
-          <span>🧭</span>
-          <span class="hidden sm:inline">ภาพรวม</span>
+          🧭 ภาพรวม
         </button>
 
         <a
@@ -53,13 +90,26 @@
           :href="googleMapsExternalUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium transition-all shadow-xs flex items-center gap-1.5"
-          title="เปิดนำทางในแอป Google Maps จริง"
+          class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
+          title="เปิดในแอป Google Maps จริง"
         >
-          <span>เปิด Maps ↗</span>
+          <span>Maps ↗</span>
         </a>
       </div>
     </div>
+
+    <!-- Virtual GPS Drive Simulation HUD Overlay -->
+    <SimulationHUD
+      :is-active="isSimulating"
+      :is-paused="isSimPaused"
+      :progress-percent="simProgressPercent"
+      :current-speed="simSpeed"
+      :remaining-distance-km="simRemainingKm"
+      :speed-multiplier="simSpeedMultiplier"
+      @toggle-pause="toggleSimPause"
+      @stop="stopSimulation"
+      @cycle-speed="cycleSimSpeed"
+    />
 
     <!-- Loading Indicator -->
     <div
@@ -91,7 +141,7 @@
     </div>
 
     <!-- Map Bottom Badges & Compass Info -->
-    <div class="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between pointer-events-none">
+    <div v-if="!isSimulating" class="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between pointer-events-none">
       <div class="pointer-events-auto bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-200/80 text-xs flex items-center gap-3">
         <span class="flex items-center gap-1.5 font-medium text-slate-700">
           <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block shadow-xs"></span>
@@ -115,6 +165,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { Loader } from '@googlemaps/js-api-loader';
 import type { LatLng, TravelMode } from '~/types';
+import SimulationHUD from './SimulationHUD.vue';
 
 const props = defineProps<{
   origin: LatLng | null;
@@ -129,14 +180,62 @@ const mapElement = ref<HTMLElement | null>(null);
 const isMapLoading = ref(true);
 const mapError = ref<string | null>(null);
 
+// Google Maps instances
 let googleMapInstance: google.maps.Map | null = null;
 let originMarker: google.maps.Marker | null = null;
 let destinationMarker: google.maps.Marker | null = null;
 let routePolylineInstance: google.maps.Polyline | null = null;
+let trafficLayerInstance: google.maps.TrafficLayer | null = null;
 let googleMapsObj: typeof google.maps | null = null;
 let polylineAnimationTimer: any = null;
 
-// สร้าง Link สำหรับเปิดดูใน Google Maps Application จริง
+// Advanced Feature: Traffic Layer Toggle
+const isTrafficEnabled = ref(false);
+
+// Advanced Feature: Map Themes (Standard -> Dark Mode -> Satellite Hybrid)
+const mapTheme = ref<'standard' | 'dark' | 'satellite'>('standard');
+
+const currentThemeIcon = computed(() => {
+  if (mapTheme.value === 'dark') return '🌙';
+  if (mapTheme.value === 'satellite') return '🛰️';
+  return '☀️';
+});
+
+const currentThemeLabel = computed(() => {
+  if (mapTheme.value === 'dark') return 'ธีมกลางคืน';
+  if (mapTheme.value === 'satellite') return 'ดาวเทียม';
+  return 'แผนที่ปกติ';
+});
+
+// Advanced Feature: GPS Drive Simulation State
+const isSimulating = ref(false);
+const isSimPaused = ref(false);
+const simProgressPercent = ref(0);
+const simSpeed = ref(58);
+const simRemainingKm = ref('0.0');
+const simSpeedMultiplier = ref(1);
+
+let simulationVehicleMarker: google.maps.Marker | null = null;
+let simulationPathPoints: google.maps.LatLng[] = [];
+let simCurrentIndex = 0;
+let simulationTimer: any = null;
+
+// Official Google Dark Mode Styles
+const darkModeStyles: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#263c3f' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#38414e' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#746855' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
+];
+
+// External Google Maps Link
 const googleMapsExternalUrl = computed(() => {
   if (!props.origin) return '#';
   const modeParam = props.travelMode === 'transit' ? 'transit' : props.travelMode === 'walking' ? 'walking' : props.travelMode === 'bicycling' ? 'bicycling' : 'driving';
@@ -177,11 +276,6 @@ const initMap = async () => {
           featureType: 'poi.business',
           stylers: [{ visibility: 'simplified' }],
         },
-        {
-          featureType: 'road',
-          elementType: 'geometry',
-          stylers: [{ lightness: 20 }],
-        },
       ],
     });
 
@@ -189,7 +283,7 @@ const initMap = async () => {
     isMapLoading.value = false;
   } catch (err: any) {
     console.error('Google Maps Loader error:', err);
-    mapError.value = 'เกิดข้อผิดพลาดในการโหลด Google Maps API กรุณาตรวจสอบว่าเปิดใช้ Maps JavaScript API และตั้งค่า HTTP Referrer ถูกต้อง';
+    mapError.value = 'เกิดข้อผิดพลาดในการโหลด Google Maps API กรุณาตรวจสอบการตั้งค่า API Key';
     isMapLoading.value = false;
   }
 };
@@ -199,7 +293,7 @@ const renderMarkersAndRoute = () => {
 
   const bounds = new googleMapsObj.LatLngBounds();
 
-  // ปลายทาง: บริษัท
+  // Destination Marker
   if (!destinationMarker) {
     destinationMarker = new googleMapsObj.Marker({
       position: { lat: props.destination.lat, lng: props.destination.lng },
@@ -229,7 +323,7 @@ const renderMarkersAndRoute = () => {
 
   bounds.extend(new googleMapsObj.LatLng(props.destination.lat, props.destination.lng));
 
-  // ต้นทาง: ผู้ใช้
+  // Origin Marker
   if (props.origin) {
     const originLatLng = new googleMapsObj.LatLng(props.origin.lat, props.origin.lng);
 
@@ -266,15 +360,15 @@ const renderMarkersAndRoute = () => {
     originMarker.setMap(null);
   }
 
-  // วาด Polyline พร้อม Animate หัวลูกศรเคลื่อนที่ตามเส้นทาง
+  // Draw Polyline & Animate Arrow Flow
   if (props.overviewPolyline && googleMapsObj.geometry?.encoding) {
     const decodedPath = googleMapsObj.geometry.encoding.decodePath(props.overviewPolyline);
+    simulationPathPoints = decodedPath;
 
     if (routePolylineInstance) {
       routePolylineInstance.setMap(null);
     }
 
-    // ไอคอนลูกศรเดินทางเคลื่อนที่
     const arrowSymbol = {
       path: googleMapsObj.SymbolPath.FORWARD_CLOSED_ARROW,
       scale: 3.5,
@@ -299,31 +393,29 @@ const renderMarkersAndRoute = () => {
       map: googleMapInstance,
     });
 
-    // เริ่มต้น Animation ให้หัวลูกศรวิ่งบนเส้นทางอย่างต่อเนื่อง
     startArrowAnimation();
-
-    // ขยาย bounds ให้ครอบคลุมทุกจุดใน polyline
     decodedPath.forEach((pt) => bounds.extend(pt));
   } else if (routePolylineInstance) {
     stopArrowAnimation();
     routePolylineInstance.setMap(null);
+    simulationPathPoints = [];
   }
 
-  // ปรับขนาดหน้าจอแสดงผลอัตโนมัติ
-  if (props.origin) {
+  // Fit Bounds
+  if (props.origin && !isSimulating.value) {
     googleMapInstance.fitBounds(bounds, {
       top: 60,
       right: 50,
       bottom: 60,
       left: 50,
     });
-  } else {
+  } else if (!isSimulating.value) {
     googleMapInstance.setCenter({ lat: props.destination.lat, lng: props.destination.lng });
     googleMapInstance.setZoom(14);
   }
 };
 
-// เคลื่อนไหวไอคอนลูกศรตามเส้นทาง (Polyline Arrow Animation)
+// Polyline Arrow Animation
 const startArrowAnimation = () => {
   stopArrowAnimation();
   let count = 0;
@@ -344,6 +436,142 @@ const stopArrowAnimation = () => {
     clearInterval(polylineAnimationTimer);
     polylineAnimationTimer = null;
   }
+};
+
+// Toggle Traffic Layer
+const toggleTrafficLayer = () => {
+  if (!googleMapInstance || !googleMapsObj) return;
+  isTrafficEnabled.value = !isTrafficEnabled.value;
+
+  if (isTrafficEnabled.value) {
+    if (!trafficLayerInstance) {
+      trafficLayerInstance = new googleMapsObj.TrafficLayer();
+    }
+    trafficLayerInstance.setMap(googleMapInstance);
+  } else {
+    trafficLayerInstance?.setMap(null);
+  }
+};
+
+// Cycle Map Theme (Standard -> Dark -> Satellite)
+const cycleMapTheme = () => {
+  if (!googleMapInstance) return;
+
+  if (mapTheme.value === 'standard') {
+    mapTheme.value = 'dark';
+    googleMapInstance.setMapTypeId('roadmap');
+    googleMapInstance.setOptions({ styles: darkModeStyles });
+  } else if (mapTheme.value === 'dark') {
+    mapTheme.value = 'satellite';
+    googleMapInstance.setMapTypeId('hybrid');
+    googleMapInstance.setOptions({ styles: [] });
+  } else {
+    mapTheme.value = 'standard';
+    googleMapInstance.setMapTypeId('roadmap');
+    googleMapInstance.setOptions({ styles: [{ featureType: 'poi.business', stylers: [{ visibility: 'simplified' }] }] });
+  }
+};
+
+// === Advanced GPS Drive Simulation ===
+const startSimulation = () => {
+  if (!simulationPathPoints.length || !googleMapInstance || !googleMapsObj) return;
+
+  isSimulating.value = true;
+  isSimPaused.value = false;
+  simCurrentIndex = 0;
+
+  if (!simulationVehicleMarker) {
+    simulationVehicleMarker = new googleMapsObj.Marker({
+      position: simulationPathPoints[0],
+      map: googleMapInstance,
+      title: 'รถยนต์ของคุณกำลังเดินทาง',
+      icon: {
+        path: googleMapsObj.SymbolPath.FORWARD_CLOSED_ARROW,
+        scale: 6,
+        fillColor: '#10b981',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+        rotation: 0,
+      },
+    });
+  } else {
+    simulationVehicleMarker.setPosition(simulationPathPoints[0]);
+    simulationVehicleMarker.setMap(googleMapInstance);
+  }
+
+  googleMapInstance.setCenter(simulationPathPoints[0]);
+  googleMapInstance.setZoom(17);
+
+  runSimulationStep();
+};
+
+const runSimulationStep = () => {
+  clearInterval(simulationTimer);
+  const baseInterval = 100 / simSpeedMultiplier.value;
+
+  simulationTimer = setInterval(() => {
+    if (isSimPaused.value) return;
+
+    if (simCurrentIndex >= simulationPathPoints.length - 1) {
+      simProgressPercent.value = 100;
+      simRemainingKm.value = '0.0';
+      clearInterval(simulationTimer);
+      alert('🎉 ยินดีด้วย! คุณเดินทางถึงบริษัทปลายทางเรียบร้อยแล้ว');
+      stopSimulation();
+      return;
+    }
+
+    simCurrentIndex++;
+    const currentPoint = simulationPathPoints[simCurrentIndex];
+    const prevPoint = simulationPathPoints[simCurrentIndex - 1];
+
+    if (simulationVehicleMarker && googleMapInstance && googleMapsObj) {
+      simulationVehicleMarker.setPosition(currentPoint);
+
+      // Compute heading angle
+      if (googleMapsObj.geometry?.spherical) {
+        const heading = googleMapsObj.geometry.spherical.computeHeading(prevPoint, currentPoint);
+        const icon = simulationVehicleMarker.getIcon() as google.maps.Symbol;
+        if (icon) {
+          icon.rotation = heading;
+          simulationVehicleMarker.setIcon(icon);
+        }
+      }
+
+      // Camera Follow
+      googleMapInstance.panTo(currentPoint);
+
+      // Metrics computation
+      const totalPoints = simulationPathPoints.length;
+      simProgressPercent.value = Math.round((simCurrentIndex / totalPoints) * 100);
+      const remainingPoints = totalPoints - simCurrentIndex;
+      simRemainingKm.value = ((remainingPoints / totalPoints) * 5.2).toFixed(1);
+
+      // Fluctuate realistic virtual speed (45 - 68 km/h)
+      simSpeed.value = 45 + Math.floor(Math.sin(simCurrentIndex * 0.3) * 18 + 5);
+    }
+  }, baseInterval);
+};
+
+const toggleSimPause = () => {
+  isSimPaused.value = !isSimPaused.value;
+};
+
+const cycleSimSpeed = () => {
+  if (simSpeedMultiplier.value === 1) simSpeedMultiplier.value = 2;
+  else if (simSpeedMultiplier.value === 2) simSpeedMultiplier.value = 4;
+  else simSpeedMultiplier.value = 1;
+  runSimulationStep();
+};
+
+const stopSimulation = () => {
+  clearInterval(simulationTimer);
+  isSimulating.value = false;
+  if (simulationVehicleMarker) {
+    simulationVehicleMarker.setMap(null);
+  }
+  fitAllBounds();
 };
 
 const focusLocation = (type: 'origin' | 'destination') => {
@@ -381,5 +609,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopArrowAnimation();
+  clearInterval(simulationTimer);
 });
 </script>

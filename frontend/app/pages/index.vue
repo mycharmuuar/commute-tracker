@@ -14,15 +14,28 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-base sm:text-lg font-black text-slate-900 leading-tight tracking-tight">Commute Tracker</h1>
-              <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Nuxt 4</span>
+              <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Nuxt 4 Pro</span>
             </div>
-            <p class="text-xs text-slate-500 hidden sm:block">ระบบติดตามและคำนวณเส้นทางไปบริษัทแบบ Real-time</p>
+            <p class="text-xs text-slate-500 hidden sm:block">ระบบติดตามและวิเคราะห์เส้นทางไปบริษัทแบบ Real-time</p>
           </div>
         </div>
 
-        <div class="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100/90 px-3.5 py-1.5 rounded-full border border-slate-200 shadow-2xs">
-          <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-          <span class="truncate max-w-[180px] sm:max-w-none">ปลายทาง: {{ companyName }}</span>
+        <div class="flex items-center gap-2">
+          <!-- Smart Alarm Launch Button in Header -->
+          <button
+            v-if="routeData"
+            @click="isAlarmModalOpen = true"
+            type="button"
+            class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-full text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-2xs"
+          >
+            <span>⏰</span>
+            <span class="hidden sm:inline">ตั้งเวลาออกจากบ้าน</span>
+          </button>
+
+          <div class="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100/90 px-3.5 py-1.5 rounded-full border border-slate-200 shadow-2xs">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <span class="truncate max-w-[140px] sm:max-w-none">ปลายทาง: {{ companyName }}</span>
+          </div>
         </div>
       </div>
     </header>
@@ -139,6 +152,15 @@
             :route-data="routeData"
           />
 
+          <!-- Multimodal Comparison Matrix (Advanced Feature) -->
+          <MultimodalComparison
+            v-if="routeData"
+            :active-mode="activeMode"
+            :distance-km="(routeData.distance.value || 5200) / 1000"
+            :driving-minutes="Math.round((routeData.duration_in_traffic?.value || routeData.duration.value || 1500) / 60)"
+            @select-mode="handleModeChange"
+          />
+
           <!-- Destination Info Details -->
           <div class="bg-white rounded-3xl p-4 shadow-sm border border-slate-200/80 text-xs text-slate-600 space-y-2">
             <div class="flex items-center justify-between text-slate-800 font-bold">
@@ -154,7 +176,7 @@
         </div>
 
         <!-- Right Panel: Google Map Canvas (7 Cols on LG) -->
-        <div class="lg:col-span-7 flex flex-col order-1 lg:order-2 min-h-[460px] lg:min-h-full">
+        <div class="lg:col-span-7 flex flex-col order-1 lg:order-2 min-h-[500px] lg:min-h-full">
           <GoogleMap
             :origin="userCoords"
             :destination="destinationCoords"
@@ -166,6 +188,14 @@
 
       </div>
     </div>
+
+    <!-- Smart Alarm Modal (Advanced Feature) -->
+    <SmartAlarmModal
+      :is-open="isAlarmModalOpen"
+      :duration-seconds="routeData?.duration_in_traffic?.value || routeData?.duration.value || 1500"
+      :commute-duration-text="routeData?.duration_in_traffic?.text || routeData?.duration.text || '25 นาที'"
+      @close="isAlarmModalOpen = false"
+    />
 
     <!-- Footer -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
@@ -182,6 +212,8 @@ import { ref, onMounted } from 'vue';
 import type { LatLng, TravelMode } from '~/types';
 import { useGeolocation } from '~/composables/useGeolocation';
 import { useRouteTracker } from '~/composables/useRouteTracker';
+import SmartAlarmModal from '~/components/SmartAlarmModal.vue';
+import MultimodalComparison from '~/components/MultimodalComparison.vue';
 
 const config = useRuntimeConfig();
 
@@ -191,6 +223,8 @@ const destinationCoords = ref<LatLng>({
   lat: parseFloat(config.public.companyLat || '13.7226'),
   lng: parseFloat(config.public.companyLng || '100.5284'),
 });
+
+const isAlarmModalOpen = ref(false);
 
 const {
   status: geoStatus,
